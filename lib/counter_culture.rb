@@ -35,12 +35,18 @@ module CounterCulture
           @after_commit_counter_cache = []
         end
 
+        if [:delta_column,:max_of_column,:min_of_column].select{|k| options.has_key?(k)}.length > 1
+          raise "Cannot provide more than one of: delta_column, max_of_column, min_of_column"
+        end
+
         # add the current information to our list
         @after_commit_counter_cache<< {
           :relation => relation.is_a?(Enumerable) ? relation : [relation],
           :counter_cache_name => (options[:column_name] || "#{name.tableize}_count"),
           :column_names => options[:column_names],
           :delta_column => options[:delta_column],
+          :max_of_column => options[:max_of_column],
+          :min_of_column => options[:min_of_column],
           :foreign_key_values => options[:foreign_key_values],
           :touch => options[:touch]
         }
@@ -93,7 +99,13 @@ module CounterCulture
           end
 
           # if a delta column is provided use SUM, otherwise use COUNT
-          count_select = hash[:delta_column] ? "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))" : "COUNT(#{self_table_name}.#{self.primary_key})"
+          count_select = nil
+          if hash[:delta_column]
+            # FIXME According to SQL spec, COALESCE should not be necessary here, SUM skips NULL
+            count_select = "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))"
+          else
+            count_select = "COUNT(#{self_table_name}.#{self.primary_key})"
+          end
 
           # respect the deleted_at column if it exists
           query = query.where("#{self.table_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at')
@@ -367,7 +379,7 @@ module CounterCulture
     #   current value
     def foreign_key_value(relation, was = false)
       relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
-      first_relation = relation.first
+      final_primary_key = relation_primary_key(relation).to_sym
       if was
         first = relation.shift
         foreign_key_value = send("#{relation_foreign_key(first)}_was")
@@ -379,7 +391,7 @@ module CounterCulture
       while !value.nil? && relation.size > 0
         value = value.send(relation.shift)
       end
-      return value.try(relation_primary_key(first_relation).to_sym)
+      return value.try(final_primary_key)
     end
 
     def relation_klass(relation)

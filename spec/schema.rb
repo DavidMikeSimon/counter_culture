@@ -161,4 +161,13 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
     t.datetime "updated_at", :null => false
   end
 
+  create_table "garages", :force => true do |t|
+    t.integer "oldest_year"
+    t.integer "newest_year"
+  end
+
+  create_table "cars", :force => true do |t|
+    t.integer "year"
+    t.integer "garage_id", :null => false
+  end
 end

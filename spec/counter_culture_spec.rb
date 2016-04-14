@@ -19,6 +19,8 @@ require 'models/categ'
 require 'models/subcateg'
 require 'models/another_post'
 require 'models/another_post_comment'
+require 'models/garage'
+require 'models/car'
 
 require 'database_cleaner'
 DatabaseCleaner.strategy = :deletion
@@ -1291,6 +1293,23 @@ describe "CounterCulture" do
     user.review_value_sum.round(1).should == 0
   end
 
+  it "should correctly track min and max values" do
+    g1 = Garage.create
+    g2 = Garage.create
+
+    c1 = Car.create :garage_id => g1.id, :year => 1970
+    c2 = Car.create :garage_id => g1.id, :year => 1980
+    c3 = Car.create :garage_id => g2.id, :year => 1990
+
+    g1.reload
+    g1.oldest_year.should == 1970
+    g1.newest_year.should == 1980
+    g2.oldest_year.should == 1990
+    g2.newest_year.should == 1990
+
+    # TODO: Null values, moving cars between categories, adding/deleting cars
+  end
+
   it "should update the timestamp if touch: true is set" do
     user = User.create
     product = Product.create
@@ -1369,6 +1388,31 @@ describe "CounterCulture" do
 
     fixed.length.should == 1
     categ.reload.posts_count.should == 1
+  end
+
+  it "should correctly update multi-level counter when intermediate relations change" do
+    categ1 = Categ.create :cat_id => Categ::CAT_1
+    subcateg1 = Subcateg.new :subcat_id => Subcateg::SUBCAT_1
+    subcateg1.categ = categ1
+    subcateg1.save!
+
+    categ2 = Categ.create :cat_id => Categ::CAT_2
+    subcateg2 = Subcateg.new :subcat_id => Subcateg::SUBCAT_2
+    subcateg2.categ = categ2
+    subcateg2.save!
+
+    post = Post.new
+    post.subcateg = subcateg1
+    post.save!
+
+    categ1.reload.posts_count.should == 1
+    categ2.reload.posts_count.should == 0
+
+    subcateg1.categ = categ2
+    subcateg2.save!
+
+    categ1.reload.posts_count.should == 0
+    categ2.reload.posts_count.should == 1
   end
 
   describe "#previous_model" do
