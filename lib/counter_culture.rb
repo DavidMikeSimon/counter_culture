@@ -36,8 +36,9 @@ module CounterCulture
         end
 
         # add the current information to our list
+        relation = relation.is_a?(Enumerable) ? relation : [relation]
         @after_commit_counter_cache<< {
-          :relation => relation.is_a?(Enumerable) ? relation : [relation],
+          :relation => relation,
           :counter_cache_name => (options[:column_name] || "#{name.tableize}_count"),
           :column_names => options[:column_names],
           :delta_column => options[:delta_column],
@@ -52,7 +53,8 @@ module CounterCulture
       #
       # options:
       #   { :exclude => list of relations to skip when fixing counts,
-      #     :only => only these relations will have their counts fixed }
+      #     :only => only these relations will have their counts fixed,
+      #     :where => only fix counts that match this where() condition within the join }
       # returns: a list of fixed record as an array of hashes of the form:
       #   { :entity => which model the count was fixed on,
       #     :id => the id of the model that had the incorrect count,
@@ -86,6 +88,8 @@ module CounterCulture
           klass = relation_klass(hash[:relation])
           query = klass
 
+          query = query.where(options[:where]) if options.has_key?(:where)
+
           if klass.table_name == self.table_name
             self_table_name = "#{self.table_name}_#{self.table_name}"
           else
@@ -114,7 +118,11 @@ module CounterCulture
               join_table_name = reflect.active_record.table_name
             end
             # join with alias to avoid ambiguous table name with self-referential models:
-            joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.association_primary_key} = #{join_table_name}.#{reflect.foreign_key}"
+            if reflect.belongs_to?
+              joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.association_primary_key} = #{join_table_name}.#{reflect.foreign_key}"
+            else
+              joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.foreign_key} = #{join_table_name}.#{reflect.association_primary_key}"
+            end
             # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
             joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if reflect.active_record.column_names.include?('type') and not(self.descends_from_active_record?)
             joins_query

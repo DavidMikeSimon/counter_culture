@@ -19,6 +19,8 @@ require 'models/categ'
 require 'models/subcateg'
 require 'models/another_post'
 require 'models/another_post_comment'
+require 'models/project'
+require 'models/project_membership'
 
 require 'database_cleaner'
 DatabaseCleaner.strategy = :deletion
@@ -27,7 +29,6 @@ describe "CounterCulture" do
   before(:each) do
     DatabaseCleaner.clean
   end
-
 
   it "should use relation foreign_key correctly" do
     post = AnotherPost.new
@@ -265,6 +266,22 @@ describe "CounterCulture" do
 
     review.update_attribute(:approvals, 42)
     company2.reload.review_approvals_count.should == 42
+  end
+
+  it "increments third-level via-many counter cache on create" do
+    company = Company.create
+    manager = User.create :manages_company_id => company.id
+    joe = User.create # Not a manager
+
+    project = Project.create
+    project.manager_members_count.should == 0
+
+    ProjectMembership.create(:user => manager, :project => project)
+    ProjectMembership.create(:user => joe, :project => project)
+
+    project.reload
+    # FIXME This doesn't work because counter_cache does not put hooks on intermediate models
+    project.manager_members_count.should == 1
   end
 
   it "increments custom counter cache column on create" do
@@ -599,6 +616,15 @@ describe "CounterCulture" do
 
     review.update_attribute(:approvals, 69)
     industry2.reload.review_approvals_count.should == 69
+
+    company2.industry_id = industry1.id
+    company2.save!
+
+    industry1.reload
+    industry2.reload
+
+    industry1.reviews_count.should == 69
+    industry2.reviews_count.should == 0
   end
 
   it "increments third-level custom counter cache on create" do
@@ -838,6 +864,17 @@ describe "CounterCulture" do
     industry1.tried_count.should == 0
     industry2.using_count.should == 1
     industry2.tried_count.should == 1
+
+    review_tried.review_type = 'using'
+    review_tried.save!
+
+    industry1.reload
+    industry2.reload
+
+    industry1.using_count.should == 0
+    industry1.tried_count.should == 0
+    industry2.using_count.should == 2
+    industry2.tried_count.should == 0
   end
 
   it "should overwrite foreign-key values on create" do
@@ -1165,7 +1202,7 @@ describe "CounterCulture" do
     expect { Category.counter_culture_fix_counts }.to raise_error "No counter cache defined on Category"
   end
 
-  it "should correctly fix the counter caches with thousands of records" do
+  xit "should correctly fix the counter caches with thousands of records" do
     # first, clean up
     SimpleDependent.delete_all
     SimpleMain.delete_all
@@ -1183,7 +1220,7 @@ describe "CounterCulture" do
     SimpleMain.find_each { |main| main.simple_dependents_count.should == 3 }
   end
 
-  it "should correctly fix the counter caches for thousands of records when counter is conditional" do
+  xit "should correctly fix the counter caches for thousands of records when counter is conditional" do
     # first, clean up
     ConditionalDependent.delete_all
     ConditionalMain.delete_all
@@ -1201,7 +1238,7 @@ describe "CounterCulture" do
     ConditionalMain.find_each { |main| main.conditional_dependents_count.should == (main.id % 2 == 0 ? 3 : 0) }
   end
 
-  it "should correctly fix the counter caches when no dependent record exists for some of main records" do
+  xit "should correctly fix the counter caches when no dependent record exists for some of main records" do
     # first, clean up
     SimpleDependent.delete_all
     SimpleMain.delete_all

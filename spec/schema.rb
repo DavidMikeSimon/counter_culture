@@ -161,4 +161,16 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
     t.datetime "updated_at", :null => false
   end
 
+  create_table "projects", :force => true do |t|
+    t.string   "name"
+    t.integer  "manager_members_count", :null => false, :default => 0
+  end
+
+  create_table "project_memberships", :force => true do |t|
+    t.integer  "project_id"
+    t.integer  "user_id"
+  end
+  add_index "project_memberships", :project_id
+  add_index "project_memberships", :user_id
+
 end

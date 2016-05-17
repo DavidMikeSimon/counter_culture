@@ -9,12 +9,20 @@ class User < ActiveRecord::Base
   has_many :reviews
   accepts_nested_attributes_for :reviews, :allow_destroy => true
 
+  has_many :project_memberships
+  counter_culture [:project_memberships, :project],
+    :column_name => Proc.new {|user| user.manager? ? 'manager_members_count' : nil }
+
   default_scope do
     if _default_scope_enabled
       joins("LEFT OUTER JOIN companies").uniq
     else
       all
     end
+  end
+
+  def manager?
+    self.manages_company.present?
   end
 
   class << self
